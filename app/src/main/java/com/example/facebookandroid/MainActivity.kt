@@ -3,63 +3,127 @@ package com.example.facebookandroid
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
-import com.facebook.AccessToken
-import com.facebook.CallbackManager
-import com.facebook.FacebookCallback
-import com.facebook.FacebookException
+import androidx.appcompat.app.AlertDialog
+import com.facebook.*
 import com.facebook.login.LoginManager
 import com.facebook.login.LoginResult
-import java.util.Arrays
-import com.facebook.FacebookSdk;
-import com.facebook.appevents.AppEventsLogger;
-
+import org.json.JSONException
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
 
-    // Corrigido: utilizando 'lateinit var' para instanciar a variável depois
     private lateinit var callbackManager: CallbackManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
+
+        // Inicializando o Facebook SDK
+        FacebookSdk.sdkInitialize(applicationContext)
 
         // Inicializando o CallbackManager
         callbackManager = CallbackManager.Factory.create()
+
+        // Verifica se já existe um token válido
         val accessToken = AccessToken.getCurrentAccessToken()
-        if(accessToken == null || accessToken.isExpired) {
-            startActivity(Intent(this@MainActivity, SecondActivity::class.java))
-            finish()
+        if (accessToken != null && !accessToken.isExpired) {
+            navigateToSecondActivity() // Redireciona se o usuário já estiver logado
         }
 
-        // Registrando o callback do LoginManager
+        // Botão de login com permissão de perfil público e e-mail
+        val btLogin: Button = findViewById(R.id.login_button)
+        btLogin.setOnClickListener {
+            LoginManager.getInstance().logInWithReadPermissions(
+                this, listOf("public_profile", "email")
+            )
+        }
+
+        // Gerenciando o callback de login
         LoginManager.getInstance().registerCallback(callbackManager, object : FacebookCallback<LoginResult> {
             override fun onSuccess(loginResult: LoginResult) {
-                // Corrigido: Referencia correta da MainActivity
-                startActivity(Intent(this@MainActivity, SecondActivity::class.java))
-                finish()
+                // Login bem-sucedido, obter dados do usuário
+                getUserData(loginResult.accessToken)
             }
 
             override fun onCancel() {
-                // Código para cancelamento
+                // Ação ao cancelar o login
             }
 
             override fun onError(exception: FacebookException) {
-                // Código para erro
+                // Ação ao ocorrer um erro no login
+                exception.printStackTrace()
             }
         })
-
-        val btLogin: Button = findViewById(R.id.login_button)
-        btLogin.setOnClickListener {
-            LoginManager.getInstance().logInWithReadPermissions(this, Arrays.asList("public_profile"))
-        }
     }
 
-    @Deprecated("This method has been deprecated in favor of using the Activity Result API\n      which brings increased type safety via an {@link ActivityResultContract} and the prebuilt\n      contracts for common intents available in\n      {@link androidx.activity.result.contract.ActivityResultContracts}, provides hooks for\n      testing, and allow receiving results in separate, testable classes independent from your\n      activity. Use\n      {@link #registerForActivityResult(ActivityResultContract, ActivityResultCallback)}\n      with the appropriate {@link ActivityResultContract} and handling the result in the\n      {@link ActivityResultCallback#onActivityResult(Object) callback}.")
+    // Redireciona para a SecondActivity
+    private fun navigateToSecondActivity() {
+        val intent = Intent(this, SecondActivity::class.java)
+        startActivity(intent)
+        finish() // Fecha a MainActivity
+    }
+
+    // Função para obter dados do usuário
+    private fun getUserData(accessToken: AccessToken) {
+        val request = GraphRequest.newMeRequest(
+            accessToken,
+            object : GraphRequest.GraphJSONObjectCallback {
+                override fun onCompleted(obj: JSONObject?, response: GraphResponse?) {
+                    try {
+                        val email = obj?.getString("email")
+                        if (email != null) {
+                            // E-mail obtido do Facebook, redirecionar
+                            navigateToSecondActivity()
+                        } else {
+                            // Solicitar que o usuário insira o e-mail manualmente
+                            promptUserForEmail()
+                        }
+                    } catch (exception: JSONException) {
+                        exception.printStackTrace()
+                    }
+                }
+            }
+        )
+
+        // Solicitando os campos necessários
+        val parameters = Bundle()
+        parameters.putString("fields", "id,name,email")
+        request.parameters = parameters
+        request.executeAsync()
+    }
+
+    // Função para solicitar que o usuário insira o e-mail
+    private fun promptUserForEmail() {
+        val emailInput = EditText(this)
+        emailInput.hint = "Digite seu e-mail"
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("E-mail necessário")
+            .setMessage("Por favor, insira seu e-mail.")
+            .setView(emailInput)
+            .setPositiveButton("OK") { dialog, _ ->
+                val email = emailInput.text.toString()
+                if (email.isNotEmpty()) {
+                    // Armazenar ou utilizar o e-mail conforme necessário
+                    Toast.makeText(this, "E-mail salvo: $email", Toast.LENGTH_SHORT).show()
+                    navigateToSecondActivity()
+                } else {
+                    Toast.makeText(this, "E-mail não pode ser vazio.", Toast.LENGTH_SHORT).show()
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancelar") { dialog, _ -> dialog.dismiss() }
+            .create()
+
+        dialog.show()
+    }
+
+    // Gerencia o resultado da atividade de login
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        callbackManager.onActivityResult(requestCode, resultCode, data)
         super.onActivityResult(requestCode, resultCode, data)
+        callbackManager.onActivityResult(requestCode, resultCode, data)
     }
 }
