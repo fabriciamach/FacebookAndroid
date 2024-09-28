@@ -36,7 +36,9 @@ class SecondActivity : ComponentActivity() {
         val btLogout: Button = findViewById(R.id.but_logout)
         val btShare: Button = findViewById(R.id.share_but)
         val btSelectImage: Button = findViewById(R.id.select_image_but)
-        imageView = findViewById(R.id.image_view) // Inicializando a ImageView
+        val email: TextView = findViewById(R.id.email)
+        imageView = findViewById(R.id.image_view)
+
 
         // Obtendo o AccessToken do usuário
         val accessToken = AccessToken.getCurrentAccessToken()
@@ -49,7 +51,9 @@ class SecondActivity : ComponentActivity() {
                     try {
                         // Obtendo o nome e definindo no TextView
                         val fullName = obj?.getString("name")
+                        val useremail = obj?.getString("email")
                         nome.text = fullName
+                        email.text = useremail
                     } catch (exception: JSONException) {
                         exception.printStackTrace()
                     }
